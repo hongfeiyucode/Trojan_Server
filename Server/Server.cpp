@@ -424,24 +424,20 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			// 持续接收数据，直到对方关闭连接 
 			do
 			{
+				iResult = recv(ClientSocket, recvbuf, POST_LEN, 0);
 				memset(recvbuf, 0, 2049);
 				iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-				recvbuf[iResult] = '\0';
-				int l=POST_LEN;
-				printf("接收到POST请求和数据:  %s(%d)\n", recvbuf, iResult);
-				char *buf = killhead(recvbuf, iResult);
-				iResult -= l;
 				if (iResult > 0)
 				{
 					cout << "还有" << torecvlen << "个字节需要接收" << endl;
 					int recvlen = iResult;
 					if (iResult > torecvlen)recvlen = torecvlen;
-					fwrite(buf, 1, recvlen, file);
+					fwrite(recvbuf, 1, recvlen, file);
 					torecvlen -= recvlen;
 					if (torecvlen <= 0)break;
-					
+
 					//情况1：成功接收到数据
-					printf("分离的数据:  %s(%d)\n", buf, iResult);
+					//printf("接收到数据:  %s(%d)\n", recvbuf, iResult);
 
 				}
 				else if (iResult == 0)
